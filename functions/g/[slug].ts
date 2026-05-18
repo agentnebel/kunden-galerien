@@ -1,3 +1,7 @@
+interface Env {
+  GALLERIES: KVNamespace;
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ params, env, request }) => {
   const slug = params.slug as string;
   
@@ -31,7 +35,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ params, env, request }
   
   const gallery = JSON.parse(data);
   
-  const { verifyPassword } = await import('../../_utils');
+  const { verifyPassword } = await import('../_utils');
   const valid = await verifyPassword(body.password || '', gallery.password);
   if (!valid) return json({ error: 'Falsches Passwort' }, 401);
   
