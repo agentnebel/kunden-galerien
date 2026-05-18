@@ -1,4 +1,106 @@
-export const onRequestGet: PagesFunction = async () => {
+export const onRequestGet: PagesFunction<Env> = async ({ params, env, request }) => {
+  const slug = params.slug as string;
+  
+  // Hole Galerie aus KV
+  const data = await env.GALLERIES.get(`gallery:${slug}`);
+  if (!data) {
+    return new Response('<h1>Galerie nicht gefunden</h1>', { status: 404, headers: { 'Content-Type': 'text/html' } });
+  }
+  
+  const gallery = JSON.parse(data);
+  
+  // Prüfe Auth-Cookie
+  const cookie = request.headers.get('Cookie') || '';
+  const authMatch = cookie.match(/gallery_auth_([^=]+)=([^;]+)/);
+  
+  if (!authMatch || authMatch[1] !== slug) {
+    // Zeige Login-Seite
+    return showLoginPage(gallery.customerName, slug);
+  }
+  
+  // Proxy die Adobe-Seite
+  return proxyAdobe(gallery.adobeLink, request, slug);
+};
+
+export const onRequestPost: PagesFunction<Env> = async ({ params, env, request }) => {
+  const slug = params.slug as string;
+  const body = await request.json() as { password?: string };
+  
+  const data = await env.GALLERIES.get(`gallery:${slug}`);
+  if (!data) return json({ error: 'Galerie nicht gefunden' }, 404);
+  
+  const gallery = JSON.parse(data);
+  
+  const { verifyPassword } = await import('../../_utils');
+  const valid = await verifyPassword(body.password || '', gallery.password);
+  if (!valid) return json({ error: 'Falsches Passwort' }, 401);
+  
+  // Setze Auth-Cookie
+  return json({ success: true }, 200, {
+    'Set-Cookie': `gallery_auth_${slug}=1; HttpOnly; Secure; SameSite=Strict; Max-Age=86400; Path=/g/${slug}`
+  });
+};
+
+async function proxyAdobe(adobeUrl: string, request: Request, slug: string): Promise<Response> {
+  const url = new URL(request.url);
+  const adobeBase = new URL(adobeUrl);
+  
+  // Baue Ziel-URL
+  let targetPath = url.pathname.replace(`/g/${slug}`, '');
+  if (!targetPath || targetPath === '/') targetPath = adobeBase.pathname;
+  
+  const targetUrl = `${adobeBase.origin}${targetPath}${url.search}`;
+  
+  try {
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': request.headers.get('User-Agent') || 'Mozilla/5.0',
+        'Accept': request.headers.get('Accept') || '*/*',
+        'Accept-Language': request.headers.get('Accept-Language') || 'de,en;q=0.9',
+      },
+      redirect: 'manual'
+    });
+    
+    // Wenn Redirect, folge ihm
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('Location');
+      if (location) {
+        return Response.redirect(location, response.status);
+      }
+    }
+    
+    const contentType = response.headers.get('Content-Type') || '';
+    
+    if (contentType.includes('text/html')) {
+      let body = await response.text();
+      
+      // Ersetze absolute URLs
+      body = body.replace(new RegExp(adobeBase.origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+      body = body.replace(/href="\//g, `href="/g/${slug}/`);
+      body = body.replace(/src="\//g, `src="/g/${slug}/`);
+      body = body.replace(/url\(\//g, `url(/g/${slug}/`);
+      
+      return new Response(body, {
+        status: response.status,
+        headers: { 'Content-Type': contentType }
+      });
+    }
+    
+    // Für Bilder/Assets: Proxy raw
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600'
+      }
+    });
+    
+  } catch (e) {
+    return new Response(`Proxy-Fehler: ${e.message}`, { status: 502 });
+  }
+}
+
+function showLoginPage(customerName: string, slug: string): Response {
   const html = `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -19,60 +121,28 @@ input[type="password"]:focus{border-color:#fff}
 button{width:100%;padding:14px;border:none;border-radius:8px;background:#fff;color:#0f0f0f;font-size:1rem;font-weight:600;cursor:pointer}
 button:hover{opacity:0.9}
 .error{color:#ff4444;font-size:0.85rem;margin-top:12px;display:none}
-.success{display:none}
-.success h2{color:#4ade80;margin-bottom:12px}
-.success p{color:#aaa;margin-bottom:20px}
-.success a{color:#fff;text-decoration:underline}
 .footer{padding:12px;text-align:center;font-size:0.8rem;color:#555;border-top:1px solid #222}
 </style>
 </head>
 <body>
-<div class="header"><h1 id="gallery-title">KUNDENGALERIE</h1></div>
-<div class="container" id="password-container">
+<div class="header"><h1>KUNDENGALERIE</h1></div>
+<div class="container">
 <div class="password-box">
-<h2 id="customer-name">Kunde</h2>
-<p>Bitte gib das Passwort ein, um die Galerie zu oeffnen.</p>
+<h2>${customerName}</h2>
+<p>Bitte gib das Passwort ein.</p>
 <input type="password" id="password-input" placeholder="Passwort" autocomplete="off">
 <button onclick="checkPassword()">Galerie oeffnen</button>
 <div class="error" id="error-msg">Falsches Passwort</div>
 </div>
 </div>
-<div class="container success" id="success-container">
-<div class="password-box">
-<h2>Zugriff gewaehrt</h2>
-<p id="success-text">Die Galerie wird in einem neuen Tab geoeffnet.</p>
-<button onclick="openGallery()">Galerie jetzt oeffnen</button>
-</div>
-</div>
-<div class="footer" id="footer">Geschuetzte Galerie</div>
+<div class="footer">Geschuetzte Galerie</div>
 <script>
-const SLUG=location.pathname.split('/').pop();
-let ADOBE_URL='';
-async function loadGallery(){
-  const res=await fetch('/api/gallery/'+SLUG);
-  if(!res.ok){document.body.innerHTML='<div style="display:flex;justify-content:center;align-items:center;height:100vh;color:#888"><p>Galerie nicht gefunden</p></div>';return}
-  const data=await res.json();
-  ADOBE_URL=data.adobeLink;
-  document.getElementById('customer-name').textContent=data.customerName||'Kunde';
-  document.getElementById('gallery-title').textContent='GALERIE - '+(data.customerName||'Kunde').toUpperCase();
-}
 async function checkPassword(){
   const pw=document.getElementById('password-input').value;
-  const res=await fetch('/api/gallery/'+SLUG+'/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-  if(res.ok){
-    document.getElementById('password-container').style.display='none';
-    document.getElementById('success-container').style.display='flex';
-    openGallery();
-  }else{
-    document.getElementById('error-msg').style.display='block';
-    document.getElementById('password-input').value='';
-  }
-}
-function openGallery(){
-  if(ADOBE_URL) window.open(ADOBE_URL,'_blank');
+  const res=await fetch(window.location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  if(res.ok){window.location.reload()}else{document.getElementById('error-msg').style.display='block';document.getElementById('password-input').value=''}
 }
 document.getElementById('password-input').addEventListener('keypress',e=>{if(e.key==='Enter')checkPassword()});
-loadGallery();
 </script>
 </body>
 </html>`;
@@ -81,4 +151,11 @@ loadGallery();
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' }
   });
-};
+}
+
+function json(body: object, status = 200, extraHeaders = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...extraHeaders }
+  });
+}
