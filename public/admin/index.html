@@ -81,20 +81,57 @@
   <script>
     let AUTH = localStorage.getItem('kg_admin');
     let EDIT_ID = null;
-    if (AUTH) showAdmin();
+    
+    // Initial state check
+    if (AUTH) {
+      console.log('Token found, checking validity...');
+      checkAuthAndShow();
+    }
+    
+    async function checkAuthAndShow() {
+      try {
+        const res = await fetch('/api/admin/galleries', { 
+          headers: { 'Authorization': 'Bearer ' + AUTH } 
+        });
+        if (res.status === 401) {
+          console.log('Token invalid, clearing');
+          logout();
+          return;
+        }
+        if (!res.ok) {
+          console.error('API error:', res.status);
+          showLogin();
+          return;
+        }
+        showAdmin();
+      } catch (e) {
+        console.error('Network error:', e);
+        showLogin();
+      }
+    }
+    
     async function login() {
       const pw = document.getElementById('admin-password').value;
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        AUTH = data.token;
-        localStorage.setItem('kg_admin', AUTH);
-        showAdmin();
-      } else {
+      console.log('Attempting login...');
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw })
+        });
+        console.log('Login response:', res.status);
+        if (res.ok) {
+          const data = await res.json();
+          AUTH = data.token;
+          localStorage.setItem('kg_admin', AUTH);
+          console.log('Login successful');
+          showAdmin();
+        } else {
+          document.getElementById('login-error').style.display = 'block';
+        }
+      } catch (e) {
+        console.error('Login error:', e);
+        document.getElementById('login-error').textContent = 'Netzwerkfehler';
         document.getElementById('login-error').style.display = 'block';
       }
     }
