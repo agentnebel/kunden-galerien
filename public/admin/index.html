@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Kunden-Galerien</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+    .header { padding: 20px 40px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 1.3rem; font-weight: 300; letter-spacing: 1px; }
+    .btn { padding: 10px 20px; border: 1px solid #444; border-radius: 6px; background: transparent; color: #e0e0e0; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+    .btn:hover { border-color: #fff; color: #fff; }
+    .btn-primary { background: #fff; color: #0f0f0f; border-color: #fff; }
+    .container { padding: 40px; max-width: 1200px; margin: 0 auto; }
+    .login-box { max-width: 400px; margin: 100px auto; background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 40px; text-align: center; }
+    .login-box h2 { margin-bottom: 24px; font-weight: 300; }
+    input { width: 100%; padding: 12px 14px; border: 1px solid #444; border-radius: 6px; background: #0f0f0f; color: #fff; font-size: 0.95rem; margin-bottom: 16px; outline: none; }
+    input:focus { border-color: #fff; }
+    .gallery-item { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .gallery-info h3 { font-size: 1.1rem; margin-bottom: 4px; }
+    .gallery-info p { color: #888; font-size: 0.85rem; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    .modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: #aaa; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>KUNDEN-GALERIEN</h1>
+    <button class="btn" id="logout-btn" style="display:none" onclick="logout()">Abmelden</button>
+  </div>
+  <div class="container">
+    <div id="login-view">
+      <div class="login-box">
+        <h2>Admin Login</h2>
+        <input type="password" id="admin-password" placeholder="Admin-Passwort">
+        <button class="btn btn-primary" onclick="login()" style="width:100%">Anmelden</button>
+        <div id="login-error" style="color:#ff4444;margin-top:12px;font-size:0.85rem;display:none">Falsches Passwort</div>
+      </div>
+    </div>
+    <div id="admin-view" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h2>Galerien</h2>
+        <button class="btn btn-primary" onclick="openModal()">+ Neue Galerie</button>
+      </div>
+      <div id="gallery-list"></div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h2 id="modal-title">Neue Galerie</h2>
+      <div class="form-group">
+        <label>Kundenname</label>
+        <input type="text" id="form-customer" placeholder="z.B. Max Mustermann">
+      </div>
+      <div class="form-group">
+        <label>URL-Slug</label>
+        <input type="text" id="form-slug" placeholder="z.B. mustermann-hochzeit">
+      </div>
+      <div class="form-group">
+        <label>Passwort</label>
+        <input type="text" id="form-password" placeholder="Kundenpasswort">
+      </div>
+      <div class="form-group">
+        <label>Adobe Lightroom Link</label>
+        <input type="url" id="form-adobe" placeholder="https://adobe.ly/...">
+      </div>
+      <div class="form-group">
+        <label>Notizen</label>
+        <input type="text" id="form-notes" placeholder="Interne Notizen">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveGallery()">Speichern</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    let AUTH = localStorage.getItem('kg_admin');
+    let EDIT_ID = null;
+    if (AUTH) showAdmin();
+    async function login() {
+      const pw = document.getElementById('admin-password').value;
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        AUTH = data.token;
+        localStorage.setItem('kg_admin', AUTH);
+        showAdmin();
+      } else {
+        document.getElementById('login-error').style.display = 'block';
+      }
+    }
+    function logout() { AUTH = null; localStorage.removeItem('kg_admin'); showLogin(); }
+    function showLogin() { document.getElementById('login-view').style.display = 'block'; document.getElementById('admin-view').style.display = 'none'; document.getElementById('logout-btn').style.display = 'none'; }
+    function showAdmin() { document.getElementById('login-view').style.display = 'none'; document.getElementById('admin-view').style.display = 'block'; document.getElementById('logout-btn').style.display = 'block'; loadGalleries(); }
+    async function loadGalleries() {
+      const res = await fetch('/api/admin/galleries', { headers: { 'Authorization': 'Bearer ' + AUTH } });
+      if (!res.ok) { logout(); return; }
+      const data = await res.json();
+      const list = document.getElementById('gallery-list');
+      list.innerHTML = data.length ? data.map(g => `
+        <div class="gallery-item">
+          <div class="gallery-info">
+            <h3>${g.customerName}</h3>
+            <p>/g/${g.slug} &middot; ${g.adobeLink ? 'Link vorhanden' : 'Kein Link'}</p>
+          </div>
+          <div>
+            <button class="btn" onclick="editGallery('${g.slug}')">Bearbeiten</button>
+            <button class="btn" onclick="deleteGallery('${g.slug}')" style="border-color:#ff4444;color:#ff4444">Löschen</button>
+          </div>
+        </div>
+      `).join('') : '<div style="text-align:center;padding:60px;color:#666">Noch keine Galerien</div>';
+    }
+    function openModal(id) {
+      EDIT_ID = id || null;
+      document.getElementById('modal-title').textContent = id ? 'Bearbeiten' : 'Neue Galerie';
+      ['customer','slug','password','adobe','notes'].forEach(f => document.getElementById('form-'+f).value = '');
+      document.getElementById('modal').style.display = 'flex';
+    }
+    function closeModal() { document.getElementById('modal').style.display = 'none'; EDIT_ID = null; }
+    async function saveGallery() {
+      const data = {
+        customerName: document.getElementById('form-customer').value,
+        slug: document.getElementById('form-slug').value,
+        password: document.getElementById('form-password').value,
+        adobeLink: document.getElementById('form-adobe').value,
+        notes: document.getElementById('form-notes').value,
+      };
+      if (!data.customerName || !data.slug || (!data.password && !EDIT_ID) || !data.adobeLink) { alert('Pflichtfelder fehlen'); return; }
+      const url = EDIT_ID ? '/api/admin/galleries/' + EDIT_ID : '/api/admin/galleries';
+      const method = EDIT_ID ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AUTH }, body: JSON.stringify(data) });
+      if (res.ok) { closeModal(); loadGalleries(); } else alert('Fehler: ' + await res.text());
+    }
+    async function deleteGallery(slug) {
+      if (!confirm('Löschen?')) return;
+      await fetch('/api/admin/galleries/' + slug, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + AUTH } });
+      loadGalleries();
+    }
+    function editGallery(slug) {
+      fetch('/api/admin/galleries/' + slug, { headers: { 'Authorization': 'Bearer ' + AUTH } })
+        .then(r => r.json()).then(g => {
+          openModal(slug);
+          document.getElementById('form-customer').value = g.customerName;
+          document.getElementById('form-slug').value = g.slug;
+          document.getElementById('form-adobe').value = g.adobeLink;
+          document.getElementById('form-notes').value = g.notes || '';
+        });
+    }
+  </script>
+</body>
+</html>
