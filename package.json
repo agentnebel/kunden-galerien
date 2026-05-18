@@ -1,29 +1,5 @@
 {
   "name": "kunden-galerien",
   "version": "1.0.0",
-  "description": "Kunden-Galerie-System mit Passwort-Schutz fuer Adobe-Lightroom-Galerien",
-  "scripts": {
-    "dev": "wrangler pages dev public --kv=GALLERIES",
-    "deploy": "wrangler pages deploy public"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260518.1",
-    "wrangler": "^3.55.0"
-  },
-  "main": "index.js",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/agentnebel/kunden-galerien.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/agentnebel/kunden-galerien/issues"
-  },
-  "homepage": "https://github.com/agentnebel/kunden-galerien#readme",
-  "dependencies": {
-    "bcryptjs": "^3.0.3"
-  }
+  "description": "Kunden-Galerie-System mit Passwort-Schutz fuer Adobe-Lightroom-Galerien"
 }

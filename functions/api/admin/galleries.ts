@@ -1,5 +1,5 @@
 import { json, checkAuth } from '../../_utils';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../../_utils';
 
 interface Env {
   GALLERIES: KVNamespace;
@@ -9,7 +9,7 @@ interface Gallery {
   id: string;
   slug: string;
   customerName: string;
-  passwordHash: string;
+  password: { salt: number[]; hash: number[] };
   adobeLink: string;
   notes: string;
   createdAt: string;
@@ -55,7 +55,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     id: crypto.randomUUID(),
     slug: body.slug,
     customerName: body.customerName,
-    passwordHash: await bcrypt.hash(body.password, 10),
+    password: await hashPassword(body.password),
     adobeLink: body.adobeLink,
     notes: body.notes || '',
     createdAt: new Date().toISOString(),
