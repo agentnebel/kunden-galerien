@@ -19,8 +19,10 @@ input[type="password"]:focus{border-color:#fff}
 button{width:100%;padding:14px;border:none;border-radius:8px;background:#fff;color:#0f0f0f;font-size:1rem;font-weight:600;cursor:pointer}
 button:hover{opacity:0.9}
 .error{color:#ff4444;font-size:0.85rem;margin-top:12px;display:none}
-.gallery-frame{width:100%;height:100vh;border:none;display:none}
-.gallery-container{width:100%;height:calc(100vh - 60px);display:none}
+.success{display:none}
+.success h2{color:#4ade80;margin-bottom:12px}
+.success p{color:#aaa;margin-bottom:20px}
+.success a{color:#fff;text-decoration:underline}
 .footer{padding:12px;text-align:center;font-size:0.8rem;color:#555;border-top:1px solid #222}
 </style>
 </head>
@@ -35,34 +37,39 @@ button:hover{opacity:0.9}
 <div class="error" id="error-msg">Falsches Passwort</div>
 </div>
 </div>
-<div class="gallery-container" id="gallery-container">
-<iframe class="gallery-frame" id="gallery-frame" allowfullscreen></iframe>
+<div class="container success" id="success-container">
+<div class="password-box">
+<h2>Zugriff gewaehrt</h2>
+<p id="success-text">Die Galerie wird in einem neuen Tab geoeffnet.</p>
+<button onclick="openGallery()">Galerie jetzt oeffnen</button>
+</div>
 </div>
 <div class="footer" id="footer">Geschuetzte Galerie</div>
 <script>
 const SLUG=location.pathname.split('/').pop();
-let GALLERY_DATA=null;
+let ADOBE_URL='';
 async function loadGallery(){
   const res=await fetch('/api/gallery/'+SLUG);
   if(!res.ok){document.body.innerHTML='<div style="display:flex;justify-content:center;align-items:center;height:100vh;color:#888"><p>Galerie nicht gefunden</p></div>';return}
-  GALLERY_DATA=await res.json();
-  document.getElementById('customer-name').textContent=GALLERY_DATA.customerName||'Kunde';
-  document.getElementById('gallery-title').textContent='GALERIE - '+(GALLERY_DATA.customerName||'Kunde').toUpperCase();
+  const data=await res.json();
+  ADOBE_URL=data.adobeLink;
+  document.getElementById('customer-name').textContent=data.customerName||'Kunde';
+  document.getElementById('gallery-title').textContent='GALERIE - '+(data.customerName||'Kunde').toUpperCase();
 }
 async function checkPassword(){
   const pw=document.getElementById('password-input').value;
   const res=await fetch('/api/gallery/'+SLUG+'/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
   if(res.ok){
     document.getElementById('password-container').style.display='none';
-    document.getElementById('footer').style.display='none';
-    document.querySelector('.header').style.display='none';
-    document.getElementById('gallery-frame').src=GALLERY_DATA.adobeLink;
-    document.getElementById('gallery-container').style.display='block';
-    document.getElementById('gallery-frame').style.display='block';
+    document.getElementById('success-container').style.display='flex';
+    openGallery();
   }else{
     document.getElementById('error-msg').style.display='block';
     document.getElementById('password-input').value='';
   }
+}
+function openGallery(){
+  if(ADOBE_URL) window.open(ADOBE_URL,'_blank');
 }
 document.getElementById('password-input').addEventListener('keypress',e=>{if(e.key==='Enter')checkPassword()});
 loadGallery();
