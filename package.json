@@ -1,0 +1,17 @@
+{
+  "name": "kunden-galerien",
+  "version": "1.0.0",
+  "description": "Kunden-Galerie-System mit Passwort-Schutz fuer Adobe-Lightroom-Galerien",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --platform=neutral"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240512.0",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.55.0"
+  }
+}

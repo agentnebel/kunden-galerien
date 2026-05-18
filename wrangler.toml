@@ -1,0 +1,13 @@
+name = "kunden-galerien"
+main = "src/index.ts"
+compatibility_date = "2024-05-12"
+
+[[kv_namespaces]]
+binding = "GALLERIES"
+id = "deine_kv_namespace_id"
+
+[vars]
+ADMIN_PASSWORD_HASH = "dein_gehashtes_admin_passwort"
+
+# Secrets (nicht in Git commiten):
+# JWT_SECRET -> wrangler secret put JWT_SECRET
